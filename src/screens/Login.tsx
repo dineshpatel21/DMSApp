@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { url } from '../../Const';
 
-const Login = () => {
+const Login = (props: any) => {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState(1); // 1 = phone input, 2 = OTP input
@@ -19,7 +19,7 @@ const Login = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ "mobile_number": phone }),
       });
 
       const res = await response.json();
@@ -47,7 +47,10 @@ const Login = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ phone, otp }),
+        body: JSON.stringify({
+          "mobile_number": phone,
+          "otp": otp,
+        }),
       });
 
       const res = await response.json();
@@ -56,15 +59,39 @@ const Login = () => {
         throw new Error(res.message || 'Invalid OTP');
       }
 
-      const token = res.token;
-      await AsyncStorage.setItem('authToken', token);
-      Alert.alert('Login Successful', 'Token saved for future requests.');
+      if(res.status){
+        const token = res?.data?.token;
+        await AsyncStorage.setItem('authToken', token);
+        Alert.alert('Login Successful', 'Token saved for future requests.');
+        props.navigation.replace("TopTab")
+      }
+     
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Invalid OTP');
     } finally {
       setLoading(false);
     }
   };
+
+  const checkUserLoggedIn = async () => {
+    try {
+      const userData = await AsyncStorage.getItem("authToken"); 
+      if (userData) {
+        props.navigation.replace("TopTab")
+        return true; 
+      } else {
+        console.log("No user data found");
+        return false; 
+      }
+    } catch (error) {
+      console.error("Error reading AsyncStorage:", error);
+      return false;
+    }
+  };
+
+  useEffect(()=>{
+   checkUserLoggedIn()
+  },[])
 
 
   return (
