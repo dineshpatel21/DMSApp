@@ -7,6 +7,7 @@ import SearchAndPreview from "../screens/SearchAndPreview";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useState } from "react";
+import SearchResults from "../screens/SearchResults";
 
 const Stack = createNativeStackNavigator();
 const Tab = createMaterialTopTabNavigator();
@@ -36,7 +37,7 @@ const TopTab = () => {
                     backgroundColor: '#FF4B4B',
                     paddingVertical: 12,
                     paddingHorizontal: 24,
-                    marginHorizontal:10,
+                    marginHorizontal:20,
                     borderRadius: 8,
                     justifyContent: 'center',
                     alignItems: 'center',
@@ -88,6 +89,7 @@ const Navigator = () => {
             <Stack.Navigator initialRouteName='TopTab' screenOptions={{ headerShown: false, animation: 'none' }}>
                 <Stack.Screen name='Login' component={Login} />
                 <Stack.Screen name='TopTab' component={TopTab} />
+                <Stack.Screen name='SearchResult' component={SearchResults} />
             </Stack.Navigator>
         </NavigationContainer>
     )

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,124 +7,193 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  FlatList
+  FlatList,
+  Button,
+  Image,
+  ActivityIndicator
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import DatePicker from "react-native-date-picker";
-import FileViewer from "react-native-file-viewer";
-import RNFS from "react-native-fs";
-import { zip } from "react-native-zip-archive";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { formatDate } from "./UploadFiles";
+import { useDispatch, useSelector } from "react-redux";
+import { addTag } from "../redux/action/TagAction";
+import { url } from "../../Const";
 
-const SearchAndPreview = () => {
+const SearchAndPreview = (props: any) => {
+  const dt: any = useSelector((state: any) => state.tagsReducer?.allTags)
+  const dispatch = useDispatch();
   const [category, setCategory] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [fromDate, setFromDate] = useState<Date | null>(null);
   const [toDate, setToDate] = useState<Date | null>(null);
-
   const [openFromPicker, setOpenFromPicker] = useState(false);
   const [openToPicker, setOpenToPicker] = useState(false);
-
+  const [subOptions, setSubOptions] = useState<any>([]);
+  const [subCategory, setSubCategory] = useState("");
   const [results, setResults] = useState<any[]>([]);
+  const [selectedTags, setSelectedTags] = useState<any>([]);
+  const [allTags, setAllTags] = useState<any>(dt ?? []);
+  const [tags, setTags] = useState<string[]>([]);
+  const [searchedDocument, setSearchDocument] = useState([])
+  const [searchLoader, setSearchLoader] = useState(false)
+
+
+  useEffect(() => {
+    setAllTags(dt)
+  }, [])
+
+  const handleSearch = async () => {
+    setSearchLoader(true)
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+
+      const body = {
+        major_head: category,
+        minor_head: subCategory,
+        from_date: formatDate(fromDate),
+        to_date: formatDate(toDate),
+        tags: selectedTags.map((tag: any) => ({ tag_name: tag?.label })),
+        uploaded_by: "dk",
+        start: 0,
+        length: 10,
+        filterId: "",
+        search: {
+          value: ""
+        }
+      };
+
+      console.log("body : ", body);
+
+
+      const res = await fetch(`${url}searchDocumentEntry`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          token: `${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! Status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      console.log("Search Document Entry Response:", data);
+      if (data.status) {
+        setSearchDocument(data?.data)
+        props.navigation.navigate("SearchResult", { result: data?.data })
+      }
+
+      return data;
+    } catch (err) {
+      console.error("Error searching document entry:", err);
+      return null;
+    } finally {
+      setSearchLoader(false)
+    }
+  };
+
+
+  const toggleTag = (tag: any) => {
+    if (selectedTags.some((t: any) => t.id === tag.id)) {
+      // remove tag
+      setSelectedTags(selectedTags.filter((t: any) => t.id !== tag.id));
+    } else {
+      // add tag
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
 
   const handleAddTag = () => {
-    if (newTag.trim() && !tags.includes(newTag)) {
-      setTags([...tags, newTag]);
-      setNewTag("");
+    const tagTrimmed = newTag.trim();
+    if (!tagTrimmed) return;
+
+    const newTagObj = { id: Date.now().toString(), label: tagTrimmed };
+
+    if (!allTags.some((t: any) => t.label.toLowerCase() === tagTrimmed.toLowerCase())) {
+      setAllTags([...allTags, newTagObj]);
+      dispatch(addTag(newTagObj))
     }
+    toggleTag(newTagObj);
+
+    setNewTag("");
   };
 
-  const handleSearch = () => {
-    // Mock API call
-    const mockResults = [
-      {
-        id: 1,
-        name: "Invoice_2024.pdf",
-        type: "pdf",
-        url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
-      },
-      {
-        id: 2,
-        name: "Receipt.jpg",
-        type: "image",
-        url: "https://via.placeholder.com/200"
-      },
-      {
-        id: 3,
-        name: "Data.csv",
-        type: "other",
-        url: "https://example.com/data.csv"
-      }
-    ];
-    setResults(mockResults);
+  const handleCategoryChange = (value: any) => {
+    setCategory(value);
+    setSubOptions(value === "Personal" ? ["John", "Tom", "Emily"] : ["Accounts", "HR", "IT", "Finance"]);
+    setSubCategory("");
   };
 
-  const previewFile = (file: any) => {
-    if (file.type === "image" || file.type === "pdf") {
-      Alert.alert("Preview", `Previewing ${file.name}`);
-    } else {
-      Alert.alert("Unsupported", "Preview not available for this file type.");
-    }
-  };
-
-  const downloadFile = async (file: any) => {
-    try {
-      const localPath = `${RNFS.DocumentDirectoryPath}/${file.name}`;
-      await RNFS.downloadFile({ fromUrl: file.url, toFile: localPath }).promise;
-      await FileViewer.open(localPath);
-    } catch (err) {
-      console.error("Download error:", err);
-    }
-  };
-
-  const downloadAllAsZip = async () => {
-    try {
-      const downloadDir = RNFS.DocumentDirectoryPath + "/downloads";
-      await RNFS.mkdir(downloadDir);
-
-      for (const file of results) {
-        const localPath = `${downloadDir}/${file.name}`;
-        await RNFS.downloadFile({ fromUrl: file.url, toFile: localPath }).promise;
-      }
-
-      const zipPath = `${RNFS.DocumentDirectoryPath}/all_files.zip`;
-      await zip(downloadDir, zipPath);
-      Alert.alert("ZIP Created", `All files saved as ZIP: ${zipPath}`);
-    } catch (err) {
-      console.error("ZIP error:", err);
-    }
-  };
 
   return (
     <ScrollView style={styles.container}>
       {/* Search Filters */}
       <Text style={styles.label}>Category</Text>
-      <Picker selectedValue={category} onValueChange={setCategory}>
+      <Picker selectedValue={category} onValueChange={handleCategoryChange} style={styles.picker}>
         <Picker.Item label="Select Category" value="" />
-        <Picker.Item label="Company" value="Company" />
-        <Picker.Item label="Work Order" value="Work Order" />
-        <Picker.Item label="Invoice" value="Invoice" />
+        <Picker.Item label="Personal" value="Personal" />
+        <Picker.Item label="Professional" value="Professional" />
       </Picker>
 
-      <Text style={styles.label}>Tags</Text>
-      <View style={styles.tagRow}>
-        <TextInput
-          style={styles.tagInput}
-          placeholder="Add tag"
-          value={newTag}
-          onChangeText={setNewTag}
-        />
-        <TouchableOpacity style={styles.addBtn} onPress={handleAddTag}>
-          <Text style={{ color: "#fff" }}>Add</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.tagList}>
-        {tags.map((tag, i) => (
-          <View key={i} style={styles.tag}>
-            <Text style={{ color: "#fff" }}>{tag}</Text>
-          </View>
-        ))}
-      </View>
+      {category ? (
+        <>
+          <Text style={styles.label}>Sub Category</Text>
+          <Picker selectedValue={subCategory} onValueChange={setSubCategory} style={styles.picker}>
+            <Picker.Item label="Select Sub Category" value="" />
+            {subOptions.map((opt: any, i: number) => (
+              <Picker.Item key={i} label={opt} value={opt} />
+            ))}
+          </Picker>
+        </>
+      ) : null}
+
+      <>
+        <Text style={styles.label}>Tags</Text>
+
+        {/* Input for adding tags */}
+        <View style={styles.tagRow}>
+          <TextInput
+            style={styles.tagInput}
+            placeholder="Add tag"
+            value={newTag}
+            onChangeText={setNewTag}
+          />
+          <Button title="Add" onPress={handleAddTag} />
+        </View>
+
+        {/* Available tags from server + newly added */}
+        <ScrollView horizontal style={styles.tagList}>
+          {allTags.map((tag: any, i: number) => {
+            const isSelected = selectedTags.includes(tag);
+            return (
+              <TouchableOpacity
+                key={i}
+                onPress={() => toggleTag(tag)}
+                style={[
+                  styles.tag,
+                  { backgroundColor: isSelected ? "#007BFF" : "#888" }
+                ]}
+              >
+                <Text style={{ color: "#fff" }}>{tag.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Selected tags display */}
+        <Text style={{ marginTop: 10, fontWeight: "bold" }}>Selected Tags:</Text>
+        <View style={styles.tagList}>
+          {selectedTags.map((tag: any, i: number) => (
+            <View key={i} style={[styles.tag, { backgroundColor: "#007BFF" }]}>
+              <Text style={{ color: "#fff" }}>{tag.label}</Text>
+            </View>
+          ))}
+        </View>
+      </>
 
       {/* From Date */}
       <Text style={styles.label}>From Date</Text>
@@ -171,33 +240,10 @@ const SearchAndPreview = () => {
       />
 
       <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-        <Text style={{ color: "#fff" }}>Search</Text>
+        {searchLoader ? <ActivityIndicator size="small" color="#007BFF" /> : <Text style={{ color: "#fff" }}>Search</Text>}
       </TouchableOpacity>
 
-      {/* Search Results */}
-      {results.length > 0 && (
-        <>
-          <Text style={styles.label}>Results</Text>
-          <FlatList
-            data={results}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <View style={styles.resultItem}>
-                <Text style={{ flex: 1 }}>{item.name}</Text>
-                <TouchableOpacity onPress={() => previewFile(item)}>
-                  <Text style={styles.preview}>Preview</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => downloadFile(item)}>
-                  <Text style={styles.download}>Download</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
-          <TouchableOpacity style={styles.zipBtn} onPress={downloadAllAsZip}>
-            <Text style={{ color: "#fff" }}>Download All as ZIP</Text>
-          </TouchableOpacity>
-        </>
-      )}
+
     </ScrollView>
   );
 };
@@ -250,7 +296,19 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     marginTop: 15,
     alignItems: "center"
-  }
+  },
+  picker: { borderWidth: 1, borderColor: "#ccc", marginTop: 5, marginBottom: 10 },
+  thumbnail: {
+    width: 60,
+    height: 60,
+    marginRight: 10,
+    borderRadius: 5,
+    backgroundColor: "#ddd",
+  },
+  headText: {
+    fontSize: 14,
+    fontWeight: "bold",
+  },
 });
 
 export default SearchAndPreview;

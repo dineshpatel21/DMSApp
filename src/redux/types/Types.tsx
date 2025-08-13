@@ -1,3 +1,4 @@
 export const Actions = {
-    SET_USER_INFO: 'SET_USER_INFO',
+    ADD_TAG: 'ADD_TAG',
+    SET_TAGS: 'SET_TAGS'
 }

@@ -1,6 +1,7 @@
 import { combineReducers } from "redux";
-import userInfoReducer from "./UserReducer";
+import { tagsReducer } from "./TagsReducer";
+
 
 export default combineReducers({
-    userInfoReducer
+   tagsReducer
 })

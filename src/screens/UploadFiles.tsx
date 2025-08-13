@@ -6,6 +6,14 @@ import * as ImagePicker from "react-native-image-picker";
 import { url } from "../../Const";
 import DatePicker from "react-native-date-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useDispatch } from "react-redux";
+import { setTags } from "../redux/action/TagAction";
+
+export const formatDate = (date: any) => {
+  const iso = date.toISOString().split("T")[0];
+  const [year, month, day] = iso.split("-");
+  return `${day}-${month}-${year}`;
+};
 
 const UploadFiles = () => {
   const [date, setDate] = useState(new Date());
@@ -20,6 +28,7 @@ const UploadFiles = () => {
   const [file, setFile] = useState<any>(null);
   const [loader, setLoader] = useState(false)
   const [documentLoader, setDocumentLoader] = useState(false)
+  const dispatch = useDispatch();
 
   useEffect(() => {
     fetchDocumentTags()
@@ -50,6 +59,7 @@ const UploadFiles = () => {
       console.log("Document Tags Response:", data);
       if (data?.status) {
         setAllTags(data?.data)
+        dispatch(setTags(data?.data))
       }
 
       return data;
@@ -104,19 +114,6 @@ const UploadFiles = () => {
     }
   };
 
-  const takePicture = () => {
-    ImagePicker.launchCamera({ mediaType: "photo" }, (response: any) => {
-      if (response.didCancel) return;
-      if (response.errorMessage) return Alert.alert("Error", response.errorMessage);
-      setFile(response.assets[0]);
-    });
-  };
-
-  const formatDate = (date: any) => {
-    const iso = date.toISOString().split("T")[0];
-    const [year, month, day] = iso.split("-");
-    return `${day}-${month}-${year}`;
-  };
 
   const saveDocumentEntry = async () => {
     setDocumentLoader(true)
@@ -231,7 +228,7 @@ const UploadFiles = () => {
           </View>
 
           {/* Available tags from server + newly added */}
-          <View style={styles.tagList}>
+          <ScrollView horizontal style={styles.tagList}>
             {allTags.map((tag: any, i: number) => {
               const isSelected = selectedTags.includes(tag);
               return (
@@ -247,7 +244,7 @@ const UploadFiles = () => {
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* Selected tags display */}
           <Text style={{ marginTop: 10, fontWeight: "bold" }}>Selected Tags:</Text>
